@@ -1,0 +1,98 @@
+# ClaudeGuard · Claude 环境守护
+
+启动前检查本机代理，运行期间安静观察变化，在异常时提供通知和处理建议。
+
+这是独立社区工具，与 Anthropic 无隶属或背书关系。它不保证账号安全、不验证客户端全部流量，也不实施网络拦截。
+
+源码仓库：[huating-ai/claudeguard](https://github.com/huating-ai/claudeguard)。问题反馈请使用仓库 Issues，并只提交脱敏信息。
+
+## 当前状态
+
+`0.6.0-alpha.6`，macOS 预览版，使用 Tauri 2、Rust、React 和 TypeScript。
+
+| 平台 | 状态 |
+| --- | --- |
+| macOS ARM64 | 已完成本机检测、界面和模拟客户端验收 |
+| macOS Intel | 尚未完成实机验收 |
+| Windows | 已保留平台接口及构建 CI；系统能力尚未实现，不可作为可用版本 |
+| WSL / Linux | 未支持 |
+
+真实 Claude CLI / Desktop 启动流程未由开发测试执行；启动适配器使用无害替身验证，不将模拟验收宣传为真实客户端全面兼容。
+
+## 使用流程
+
+1. 打开代理软件，启用系统 HTTP / HTTPS 代理。
+2. 首次打开 ClaudeGuard，自动读取系统代理及对应监听进程，核对地址和程序路径，再点击“确认代理并开始检测”。
+3. 查看逐项结果。只有完整检查通过并建立有效基线，才允许用户手动选择启动 CLI 或 Desktop；点击后再次完整复检。
+4. 收起窗口后继续监测。相同异常去重通知，恢复后仍须完整复检；不会自动启动、结束或重启客户端。
+
+首次识别仅为本地只读操作，不发起外网请求、不扫描常见端口、不执行 PAC、不读取代理订阅。没有发现明确代理时保留空白，由用户人工填写；不使用猜测值或演示数据回退。识别到的程序不等于可信程序，须由用户核对。
+
+此版本只支持无认证、明确端口的 `127.0.0.1` HTTP 代理，系统 HTTP 与 HTTPS 必须一致；PAC、远程代理、仅 SOCKS、仅 TUN 等配置暂不自动适配。地区和时区要求为可选个人偏好，新用户默认不指定；这不代表账号资格或官方风控规则。
+
+已有有效配置继续使用，不会因自动发现而覆盖。设置内可手动“重新识别”，候选仅填入草稿，保存才生效。异常文件保留原样，禁止以默认值静默替代。
+
+## 检查与提醒
+
+15 项检查覆盖系统代理、旁路/PAC、端口进程身份、HTTPS/TLS、出口地区及短时稳定性、DNS、路由/TUN、本地 IPv6、系统与进程时区、时间参考、客户端静态签名、环境冲突、已有进程和最终配置复核。
+
+- 完整检查最多四次固定 Cloudflare trace 请求，全部经过已确认代理；严格 TLS，不跟随重定向、不失败回退直连。
+- 后台名义每 5 秒检查本地配置，每 30 秒采样出口；实际延迟包含系统调度及网络超时。
+- 网络路径变化、休眠恢复、配置/进程/出口变化或采样过期使旧结果失效；后台恢复不能自动解锁启动。
+- 提供事件时间线、脱敏报告、具体处置建议和通知诊断。系统接收、通知中心记录、人工确认分别显示，不能相互冒充。
+- 桌面真实模式与仅观察模式共享同用户实例锁，不转发命令行参数、不切换已有进程模式。离线演示不持久化配置或发送系统通知。
+
+本工具不抓包、不解密 TLS、不更改系统代理/DNS/VPN/时区/防火墙，不读取账号、对话、Keychain、官方客户端配置或 shell 启动文件。出口 IP 只在内存比较，不进入界面、日志或报告；事件只保留最近 8 条，退出清除。
+
+Cloudflare 的请求路径不能证明代理对所有 Claude 域名采用相同策略。后台采样不是 kill switch，两次采样之间有空窗，异常通知不能阻止已运行客户端发出请求。公网 IPv6 只表示本地配置，覆盖未验证时仍会提醒并阻止新启动，不等于已证实泄漏。
+
+## 构建与测试
+
+工具链版本见 `rust-toolchain.toml`；前端使用 Node.js 26。macOS 需要 Xcode Command Line Tools。没有账号、密钥或发布凭据要求。
+
+```sh
+# 先生成前端资源，干净源码目录还没有 dist。
+cd apps/desktop
+npm ci --ignore-scripts
+npm test
+npm run build
+npm run format:check
+cd ../..
+
+cargo test --workspace --locked --features custom-protocol
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked --features custom-protocol -- -D warnings
+node --test scripts/export-public.test.mjs
+node scripts/export-public.mjs --check
+
+./scripts/desktop.sh build
+./scripts/desktop.sh demo
+# 真实本机诊断，但后端永久禁止本次进程启动客户端：
+./scripts/desktop.sh observe
+```
+
+`demo` 完全离线；`observe` 在用户确认后只读本机并经指定代理访问固定 Cloudflare；不得用真实 Claude 执行、版本查询、登录或 Anthropic 请求代替测试。
+
+构建结果为 `target/debug/bundle/macos/ClaudeGuard.app`，仅本地 ad-hoc 签名，尚未完成 Developer ID 签名、公证或正式安装器。不会接管旧版安装或 Dock。不要按正式发行包的标准理解此本地预览。
+
+CLI 的 `--check`、`--json`、`--check-for-launch`、`--monitor-check` 都只检测；首次使用未确认配置时直接拒绝，不联网。`--list-network-dependencies` 仅展示捆绑域名清单，没有 HTTP、TLS 或 DNS 探测。
+
+## 工程与协作
+
+```text
+apps/desktop/src/             界面、交互、脱敏报告
+apps/desktop/src-tauri/src/   IPC、配置、通知、窗口及实例生命周期
+crates/guard-core/           纯规则、配置、启动门槛、监测状态机
+crates/guard-platform/       系统只读采集、代理发现、受限启动适配
+crates/guard-service/        检测编排、并发和告警出口
+resources/                  离线网络依赖快照
+profiles/                   人工配置示例（不作为默认）
+```
+
+见 [架构](docs/ARCHITECTURE.md)、[首次配置](docs/ONBOARDING.md)、[隐私说明](docs/PRIVACY.md)、[通知诊断](docs/NOTIFICATION_DIAGNOSTICS.md)、[贡献约定](CONTRIBUTING.md)、[安全报告](SECURITY.md) 和 [发布状态](docs/RELEASE.md)。
+
+公开源码由 `public-files.json` 精确列举；`node scripts/export-public.mjs --check` 检查公开文件，`node scripts/export-public.mjs --destination /path/to/new/claudeguard` 导出到新目录。不会初始化 Git、上传数据或发布代码。
+
+## 许可证
+
+项目源码与原创图标采用 [Apache-2.0](LICENSE)。第三方依赖分别适用其自身许可，见 [NOTICE](NOTICE) 与 [第三方记录](THIRD_PARTY_NOTICES.md)。
