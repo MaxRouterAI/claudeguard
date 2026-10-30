@@ -6,4 +6,4 @@ ClaudeGuard 是环境诊断和提醒工具，不保证防封、账号安全、�
 
 请先用脱敏输入、回环假客户端或 fixture 复现。不要使用真实账号、密钥、聊天或客户端网络测试。公开问题不得附完整 IP、个人路径、凭据或敏感环境值。
 
-公开仓库为 `https://github.com/huating-ai/claudeguard`。请查看仓库 Security 页是否提供 “Report a vulnerability” 私密报告入口；只有该入口实际启用时才通过它提交可利用细节。若没有入口，请先用不含敏感信息的 Issue 请求维护者提供私密渠道，不要公开漏洞利用细节、账号或私人材料。
+公开仓库为 `https://github.com/MaxRouterAI/claudeguard`。请查看仓库 Security 页是否提供 “Report a vulnerability” 私密报告入口；只有该入口实际启用时才通过它提交可利用细节。若没有入口，请先用不含敏感信息的 Issue 请求维护者提供私密渠道，不要公开漏洞利用细节、账号或私人材料。

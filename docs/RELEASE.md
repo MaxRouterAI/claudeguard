@@ -11,10 +11,10 @@ ClaudeGuard 当前为 macOS 源码预览，Windows 未支持。源码准备不�
 
 ## 发布前仍需完成
 
-- 已选 Apache-2.0 并包含 LICENSE / NOTICE；源码发布目标为 `huating-ai/claudeguard`。私密漏洞报告是否启用以仓库 Security 页面实际状态为准，不在公开 Issue 中提交可利用细节。
+- 已选 Apache-2.0 并包含 LICENSE / NOTICE；源码发布目标为 `MaxRouterAI/claudeguard`。私密漏洞报告是否启用以仓库 Security 页面实际状态为准，不在公开 Issue 中提交可利用细节。
 - 在干净 macOS 环境运行构建及演示验收；公开远端 CI 要有实际通过记录。当前 CI 文件准备不等于已经在远端运行。
 - 在对应实机验证支持矩阵，未经验证的平台不提供可用性承诺。
 - 对广泛分发的安装包完成 Developer ID 签名、公证、校验值、安装/升级/卸载和回滚验收；发布凭据不能提供给不可信 PR。
 - 真实客户端启动未由代理测试，需维护者另行决定验收，不将这项缺口隐藏为“全面支持”。
 
-本版本以 Alpha 源码形式发布到 `https://github.com/huating-ai/claudeguard`；只上传审核后的文件清单，不上传个人开发工作区、运行设置或应用安装包。源码公开不代表完成所有平台或正式发行验收。发布流程不会替换本机旧版 Dock 或运行 Claude。
+本版本以 Alpha 源码形式发布到 `https://github.com/MaxRouterAI/claudeguard`；只上传审核后的文件清单，不上传个人开发工作区、运行设置或应用安装包。源码公开不代表完成所有平台或正式发行验收。发布流程不会替换本机旧版 Dock 或运行 Claude。

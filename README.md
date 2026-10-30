@@ -4,7 +4,7 @@
 
 这是独立社区工具，与 Anthropic 无隶属或背书关系。它不保证账号安全、不验证客户端全部流量，也不实施网络拦截。
 
-源码仓库：[huating-ai/claudeguard](https://github.com/huating-ai/claudeguard)。问题反馈请使用仓库 Issues，并只提交脱敏信息。
+源码仓库：[MaxRouterAI/claudeguard](https://github.com/MaxRouterAI/claudeguard)。问题反馈请使用仓库 Issues，并只提交脱敏信息。
 
 ## 当前状态
 
