@@ -107,11 +107,10 @@ impl Notifications {
         self.refresh();
     }
     pub fn refresh(self: &Arc<Self>) {
-        if self.demo || !self.active.load(Ordering::Acquire) {
-            return;
-        }
         #[cfg(target_os = "macos")]
-        native::refresh(self.clone(), false);
+        if !self.demo && self.active.load(Ordering::Acquire) {
+            native::refresh(self.clone(), false);
+        }
     }
     pub fn enable(self: &Arc<Self>) -> Result<String, String> {
         if self.demo || !self.active.load(Ordering::Acquire) {

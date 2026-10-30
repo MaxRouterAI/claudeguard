@@ -32,7 +32,7 @@ a024696a0a7fa8b5941d60246bfa5299bd14116421d54ea0540406c66555bb52  apps/desktop/s
 6a8f5148016c7a22340dcb4fe5a2e013e3a4fe28079cb557d67e38ecd378ef4f  apps/desktop/src-tauri/src/lib.rs
 6d6507fef9612ea7a8d2be129ad634e09b72c4b42b048e872ad671064be2cc33  apps/desktop/src-tauri/src/main.rs
 4e9696394694785d4fd84869b833b34a42f69b611e4b857279535292adc88caf  apps/desktop/src-tauri/src/mode.rs
-f37c36e8415ff7ec8098ddef18793417976f06d2da4d95b2bfeeeb4669b8afae  apps/desktop/src-tauri/src/notifications.rs
+efdd66c432b28e97476037aae8184aefd43999f4e8a9fce65a07d97e02837d43  apps/desktop/src-tauri/src/notifications.rs
 32954f7d81de7bfc8b33463fd8d44b900e4e61506a9e1f109a9e0b8f24223890  apps/desktop/src-tauri/src/notifications/macos.rs
 0c0dacaf53fe72e78ea02da51e72ec2480630b59fe88fa0a6ae016df48b05a07  apps/desktop/src-tauri/src/runtime.rs
 4ab9f8ef137901f9168545038764ba02f5bc8ea75fe92d9e32d87cfd2853f082  apps/desktop/src-tauri/src/settings.rs
