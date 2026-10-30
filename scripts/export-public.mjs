@@ -53,7 +53,7 @@ export function collectPublic(root) {
       if (
         !textExtensions.test(name) &&
         !binary.test(name) &&
-        !["LICENSE", "NOTICE", ".gitignore"].includes(name)
+        !["LICENSE", "NOTICE", ".gitignore", ".gitattributes"].includes(name)
       )
         throw Error(`未审核的文件类型：${name}`);
       const resolved = resolve(root, name);
