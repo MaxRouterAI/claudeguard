@@ -62,7 +62,7 @@ pub fn run(mode: &Mode) -> Option<i32> {
             });
             return Some(match result {
                 Ok(country) => {
-                    println!("单次运行采样成功：Cloudflare {country}；未执行客户端，不代表完整启动检查通过。");
+                    println!("单次代理出口采样成功：Cloudflare {country}；IPv4/IPv6 客户端覆盖未验证，未执行客户端，不代表完整预检通过。");
                     0
                 }
                 Err(e) => {
@@ -89,7 +89,7 @@ pub fn run(mode: &Mode) -> Option<i32> {
         for check in &report.checks {
             println!("{:?} {}：{}", check.status, check.id.label(), check.detail);
         }
-        println!("仅环境检查；未执行客户端，不代表客户端全部流量或账号安全。");
+        println!("代理预检模式；IPv4/IPv6 实际客户端覆盖未验证，不提供防直连保护；未执行客户端。");
     }
     Some(
         if if launch_check {
@@ -105,7 +105,7 @@ pub fn run(mode: &Mode) -> Option<i32> {
 }
 pub fn json_report(report: &Report) -> String {
     // Preserve the old array/name/status/detail shape and add stable IDs/timing.
-    let checks:Vec<_>=report.checks.iter().map(|c|serde_json::json!({"id":c.id,"name":c.id.label(),"status":c.status,"detail":c.detail,"elapsedMs":c.elapsed_ms})).collect();
+    let checks:Vec<_>=report.checks.iter().map(|c|serde_json::json!({"id":c.id,"name":c.id.label(),"status":c.status,"detail":c.detail,"elapsedMs":c.elapsed_ms,"blocksLaunch":c.blocks_launch(),"preflightMode":"proxy_preflight","coverageVerified":false})).collect();
     serde_json::to_string_pretty(&checks).expect("fixed serializable report")
 }
 
@@ -161,5 +161,30 @@ mod tests {
         ] {
             assert!(!text.contains(field));
         }
+    }
+}
+
+#[cfg(test)]
+mod preflight_report_tests {
+    use super::*;
+    use guard_core::domain::{Check, RuleId, Status};
+    #[test]
+    fn legacy_json_array_keeps_coverage_scope_and_canonical_blocking_impact() {
+        let report = Report {
+            checks: vec![
+                Check::new(RuleId::Ipv6, Status::Warning, "coverage unknown"),
+                Check::new(RuleId::HttpsTls, Status::Fail, "proxy failed"),
+            ],
+            checked_at: 100,
+            baseline: None,
+        };
+        let json: serde_json::Value = serde_json::from_str(&json_report(&report)).unwrap();
+        let array = json.as_array().unwrap();
+        assert_eq!(array[0]["preflightMode"], "proxy_preflight");
+        assert_eq!(array[0]["coverageVerified"], false);
+        assert_eq!(array[0]["blocksLaunch"], false);
+        assert_eq!(array[1]["blocksLaunch"], true);
+        assert!(array.iter().all(|c| c.get("name").is_some()));
+        assert!(!json_report(&report).contains("baseline"));
     }
 }

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-pub const POLICY_VERSION: u32 = 2;
+pub const POLICY_VERSION: u32 = 3;
 pub const PROBE_URL: &str = "https://www.cloudflare.com/cdn-cgi/trace";
 /// Frozen launch policy passed to the check-only child. No config file or
 /// environment fallback may replace this with a different proxy profile.

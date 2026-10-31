@@ -10,3 +10,4 @@ pub mod launch;
 pub mod monitoring;
 pub mod notifications;
 pub mod policy;
+pub mod proxy;

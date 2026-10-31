@@ -310,7 +310,7 @@ fn ipv6_disconnected_interface_is_not_an_active_public_path() {
 }
 
 #[test]
-fn ipv6_public_or_route_only_paths_block_local_baselines_without_network() {
+fn ipv6_coverage_advisories_do_not_block_proxy_local_baselines() {
     for routes_only in [false, true] {
         let mut r = Runner::new();
         if routes_only {
@@ -319,10 +319,15 @@ fn ipv6_public_or_route_only_paths_block_local_baselines_without_network() {
             r.interfaces.push_str("\tinet6 2001:db8::7 prefixlen 64\n");
         }
         let r = Arc::new(r);
-        assert!(matches!(
-            platform(r.clone()).local(&fixture_profile()),
-            Err(Fault::Ipv6Coverage)
-        ));
+        assert!(platform(r.clone()).local(&fixture_profile()).is_ok());
+        assert!(!r
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(exe, args)| exe == "/sbin/ifconfig"
+                || (exe == "/usr/sbin/netstat"
+                    && args.last().map(String::as_str) == Some("inet6"))));
         assert!(!r
             .calls
             .lock()
@@ -332,7 +337,7 @@ fn ipv6_public_or_route_only_paths_block_local_baselines_without_network() {
     }
 }
 #[test]
-fn ipv6_read_failure_or_collection_drift_cannot_be_used_as_a_clear_baseline() {
+fn ipv6_read_failure_or_collection_drift_is_explained_without_blocking_proxy_preflight() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     struct Unstable {
         base: Runner,
@@ -376,10 +381,7 @@ fn ipv6_read_failure_or_collection_drift_cannot_be_used_as_a_clear_baseline() {
             _ => "两轮本地采样结果发生变化",
         };
         assert!(check.detail.contains(expected));
-        assert!(matches!(
-            p.local(&fixture_profile()),
-            Err(Fault::Ipv6Coverage)
-        ));
+        assert!(p.local(&fixture_profile()).is_ok());
     }
 }
 

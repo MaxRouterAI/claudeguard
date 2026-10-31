@@ -23,7 +23,7 @@ pub fn cli_script(
     directory: &Path,
     profile: &Profile,
 ) -> Result<String, Fault> {
-    profile.validate().map_err(|_| Fault::Client)?;
+    let proxy = guard_core::proxy::ClientProxy::from_profile(profile).map_err(|_| Fault::Client)?;
     let frozen = serde_json::to_string(&guard_core::config::LaunchProfile::new(profile.clone()))
         .map_err(|_| Fault::Client)?;
     let mut paths = Vec::new();
@@ -34,9 +34,15 @@ pub fn cli_script(
         }
         paths.push(quote(s));
     }
-    let settings=serde_json::json!({"env":{"HTTP_PROXY":profile.proxy_url,"HTTPS_PROXY":profile.proxy_url,"ALL_PROXY":profile.proxy_url,"http_proxy":profile.proxy_url,"https_proxy":profile.proxy_url,"all_proxy":profile.proxy_url,"NO_PROXY":"localhost,127.0.0.1,::1","no_proxy":"localhost,127.0.0.1,::1","NODE_TLS_REJECT_UNAUTHORIZED":"1"}}).to_string();
-    Ok(format!("#!/bin/zsh -f\nset -eu\ncd -- {}\n/usr/bin/codesign --verify --strict -R {} {} || exit 1\n{} --check-for-launch --profile-json {} || {{ printf '%s\\n' '启动复检失败，未运行客户端。'; exit 1; }}\nunset NODE_OPTIONS NODE_TLS_REJECT_UNAUTHORIZED ELECTRON_RUN_AS_NODE\nexec /usr/bin/env HTTP_PROXY={} HTTPS_PROXY={} ALL_PROXY={} http_proxy={} https_proxy={} all_proxy={} NO_PROXY='localhost,127.0.0.1,::1' no_proxy='localhost,127.0.0.1,::1' {} --settings {}\n",paths[2],quote("=anchor apple generic and certificate leaf[subject.OU] = \"Q6L2SF6YDW\""),paths[1],paths[0],quote(&frozen),quote(&profile.proxy_url),quote(&profile.proxy_url),quote(&profile.proxy_url),quote(&profile.proxy_url),quote(&profile.proxy_url),quote(&profile.proxy_url),paths[1],quote(&settings)))
+    let environment = proxy
+        .environment
+        .iter()
+        .map(|(k, v)| format!("{k}={}", quote(v)))
+        .collect::<Vec<_>>()
+        .join(" ");
+    Ok(format!("#!/bin/zsh -f\nset -eu\ncd -- {}\n/usr/bin/codesign --verify --strict -R {} {} || exit 1\n{} --check-for-launch --profile-json {} || {{ printf '%s\\n' '启动复检失败，未运行客户端。'; exit 1; }}\nunset NODE_OPTIONS NODE_TLS_REJECT_UNAUTHORIZED ELECTRON_RUN_AS_NODE\nexec /usr/bin/env {environment} {} --settings {}\n",paths[2],quote("=anchor apple generic and certificate leaf[subject.OU] = \"Q6L2SF6YDW\""),paths[1],paths[0],quote(&frozen),paths[1],quote(&proxy.cli_settings())))
 }
+
 pub fn launch(
     platform: &MacPlatform,
     target: ClientTarget,
@@ -46,7 +52,7 @@ pub fn launch(
     authorize: &dyn Fn() -> bool,
 ) -> Result<(), Fault> {
     let path = platform.verify(target)?;
-    profile.validate().map_err(|_| Fault::Client)?;
+    let proxy = guard_core::proxy::ClientProxy::from_profile(profile).map_err(|_| Fault::Client)?;
     let config = NSWorkspaceOpenConfiguration::new();
     config.setActivates(true);
     config.setAllowsRunningApplicationSubstitution(false);
@@ -58,31 +64,26 @@ pub fn launch(
     );
     if target == ClientTarget::Desktop {
         platform.ensure_desktop_not_running()?;
-        let proxy = NSString::from_str(&profile.proxy_url);
-        let bypass = NSString::from_str("localhost,127.0.0.1,::1");
-        let keys: Vec<_> = [
-            "HTTP_PROXY",
-            "HTTPS_PROXY",
-            "ALL_PROXY",
-            "http_proxy",
-            "https_proxy",
-            "all_proxy",
-            "NO_PROXY",
-            "no_proxy",
-        ]
-        .iter()
-        .map(|s| NSString::from_str(s))
-        .collect();
-        let key_refs: Vec<_> = keys.iter().map(|s| &**s).collect();
-        let values: Vec<_> = (0..8)
-            .map(|i| if i < 6 { &*proxy } else { &*bypass })
+        let keys: Vec<_> = proxy
+            .environment
+            .keys()
+            .map(|s| NSString::from_str(s))
             .collect();
-        config.setEnvironment(&NSDictionary::from_slices(&key_refs, &values));
-        let args = [
-            NSString::from_str(&format!("--proxy-server={}", profile.proxy_url)),
-            NSString::from_str("--proxy-bypass-list=localhost;127.0.0.1;[::1]"),
-        ];
-        config.setArguments(&NSArray::from_slice(&[&*args[0], &*args[1]]));
+        let values: Vec<_> = proxy
+            .environment
+            .values()
+            .map(|s| NSString::from_str(s))
+            .collect();
+        let key_refs: Vec<_> = keys.iter().map(|s| &**s).collect();
+        let value_refs: Vec<_> = values.iter().map(|s| &**s).collect();
+        config.setEnvironment(&NSDictionary::from_slices(&key_refs, &value_refs));
+        let args: Vec<_> = proxy
+            .desktop_arguments
+            .iter()
+            .map(|s| NSString::from_str(s))
+            .collect();
+        let arg_refs: Vec<_> = args.iter().map(|s| &**s).collect();
+        config.setArguments(&NSArray::from_slice(&arg_refs));
         let url = NSURL::fileURLWithPath(&NSString::from_str(path.to_str().ok_or(Fault::Client)?));
         final_desktop_authorization(platform, authorize)?;
         NSWorkspace::sharedWorkspace().openApplicationAtURL_configuration_completionHandler(

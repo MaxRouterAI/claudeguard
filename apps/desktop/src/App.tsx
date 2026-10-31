@@ -36,7 +36,8 @@ export function App() {
     if (state.scanning) setSelected(rules[Math.min(state.checks.length, rules.length - 1)].id);
     else if (state.checks.length)
       setSelected(
-        state.checks.find((check) => ['fail', 'warning'].includes(check.status))?.id ??
+        state.checks.find((check) => check.blocksLaunch !== false)?.id ??
+          state.checks.find((check) => check.status === 'warning')?.id ??
           'exit_region',
       );
   }, [state?.scanning, state?.checks.length]);
@@ -54,11 +55,13 @@ export function App() {
     );
   const busy = state.scanning || state.launching || guard.pending !== null;
   const completed = state.checks.length;
-  const blocked = state.checks.some((c) => ['fail', 'warning', 'skipped'].includes(c.status));
+  const blocked = state.checks.some((c) => c.blocksLaunch !== false);
   const failureCount = state.checks.filter((c) => c.status === 'fail').length;
   const selectedRunning =
     state.scanning && rules[Math.min(completed, rules.length - 1)].id === selected;
-  const warningCount = state.checks.filter((c) => c.status === 'warning').length;
+  const warningCount = state.checks.filter(
+    (c) => c.status === 'warning' && c.blocksLaunch !== false,
+  ).length;
   const item = state.checks.find((c) => c.id === selected);
   const definition = rules.find((r) => r.id === selected)!;
   const tone = state.setupRequired
@@ -82,13 +85,15 @@ export function App() {
           ? `检测完成，发现 ${failureCount} 项异常`
           : warningCount
             ? `检测完成，${warningCount} 项提醒阻止启动`
-            : state.issue
-              ? '监测结果已失效，请重新检测'
-              : state.requiresRecheck
-                ? '启动前需要完整复检'
-                : state.launchAllowed
-                  ? '本机代理探测通过，可手动启动'
-                  : '本机代理探测通过';
+            : blocked
+              ? '代理预检尚未通过'
+              : state.issue
+                ? '监测结果已失效，请重新检测'
+                : state.requiresRecheck
+                  ? '启动前需要完整复检'
+                  : state.launchAllowed
+                    ? '代理预检通过，可手动启动'
+                    : '代理预检通过';
   const monitorGood = state.monitorActive && !state.issue && !state.recovering;
   const checkGuidance = state.checkGuidance?.find((entry) => entry.id === selected)?.advice;
   async function sendTest() {
@@ -119,7 +124,7 @@ export function App() {
         <div className="hero-main">
           <div
             className="hero-status"
-            aria-label={tone === 'good' ? '本机代理探测通过' : '本机检查尚未放行'}
+            aria-label={tone === 'good' ? '代理预检通过' : '本机检查尚未放行'}
           >
             {busy ? (
               <span className="spinner" />
@@ -132,14 +137,14 @@ export function App() {
             )}
           </div>
           <div className="hero-copy">
-            <small>CLAUDEGUARD / 环境守护</small>
+            <small>CLAUDEGUARD / 代理预检</small>
             <h1>{title}</h1>
             <p>
               {state.demo
                 ? '离线模拟数据；不会联网或执行客户端。'
-                : '域名目录仅离线展示；客户端实际路径未验证。'}
+                : 'IPv4 / IPv6 实际客户端流量覆盖未验证；预检不提供防直连保护。'}
             </p>
-            <p className="scope-note">仅检查与通知 · 不抓包、不主动断网</p>
+            <p className="scope-note">代理预检模式 · 仅检查与通知 · 不主动断网</p>
           </div>
           <div className="launch-actions">
             {state.setupRequired && (
@@ -153,6 +158,7 @@ export function App() {
                 disabled={
                   state.setupRequired ||
                   busy ||
+                  (!state.demo && blocked) ||
                   (!state.demo && (!state.launchAllowed || !state.canLaunch || !state.clients.cli))
                 }
                 onClick={() => (state.demo ? setHelp('cli') : void guard.launch('cli'))}
@@ -165,6 +171,7 @@ export function App() {
                 disabled={
                   state.setupRequired ||
                   busy ||
+                  (!state.demo && blocked) ||
                   (!state.demo &&
                     (!state.launchAllowed || !state.canLaunch || !state.clients.desktop))
                 }
@@ -308,7 +315,7 @@ export function App() {
             <small>检测详情</small>
             <small>
               {selected === 'ipv6'
-                ? '覆盖检查'
+                ? '覆盖提醒'
                 : ['dns', 'route', 'clock', 'existing_clients'].includes(selected)
                   ? '参考信息'
                   : '核心检查'}
@@ -343,7 +350,7 @@ export function App() {
               {selected === 'exit_region'
                 ? '以本次 Cloudflare 请求返回的地区为依据。出口地区只是当前配置基线，不代表实际所在地或平台使用资格。'
                 : selected === 'ipv6'
-                  ? '只读采集接口与 IPv6 路由，排除已断开、停用或暂不可用的地址；存在可用公网地址、外网路由或读取失败时仍阻止启动；接口状态不明不会排除其公网地址。未发现公网路径仅是本次观察，不代表代理覆盖已验证。'
+                  ? '本项只读观察 IPv6，不验证实际客户端流量覆盖；覆盖未知仅提醒，不阻止代理预检启动，不要求关闭 IPv6。代理、旁路、监听身份及 HTTPS 异常仍会阻止启动。'
                   : `${definition.note}。此检查不验证客户端全部流量，不判断账号状态或平台资格。`}
             </p>
           </div>

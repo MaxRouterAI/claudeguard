@@ -3,8 +3,10 @@ import type { Snapshot } from './types';
 export function reportText(state: Snapshot): string {
   return JSON.stringify(
     {
-      mode: state.demo ? 'offline-demo' : 'environment-observation',
+      mode: state.demo ? 'offline-demo' : 'proxy-preflight',
       policyVersion: state.policyVersion,
+      preflightMode: state.preflightMode ?? 'proxy_preflight',
+      coverage: 'IPv4/IPv6 actual client traffic unverified',
       checks: state.checks,
       runtime: {
         active: state.monitorActive === true,
@@ -36,7 +38,8 @@ export function reportText(state: Snapshot): string {
               : null,
           }
         : null,
-      scope: '仅环境检查，不验证客户端全部流量；不代表账号安全保证。报告不能作为启动许可。',
+      scope:
+        '仅代理链路预检，IPv4/IPv6 实际客户端覆盖未验证，不提供防直连保护。报告不能作为启动许可。',
     },
     null,
     2,

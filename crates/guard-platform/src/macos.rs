@@ -234,14 +234,10 @@ impl Platform for MacPlatform {
         if a.status != Status::Pass || b.status != Status::Pass {
             return Err(Fault::ProxySettings);
         }
-        let ipv6 = self.ipv6_observation().map_err(|_| Fault::Ipv6Coverage)?;
-        if !ipv6.check().status.accepted() {
-            return Err(Fault::Ipv6Coverage);
-        }
         Ok(LocalSnapshot {
             proxy_fingerprint: raw,
             owner_pid: self.owner(profile)?,
-            routes: format!("{}\nIPv6:{}", self.routes()?, ipv6.fingerprint()),
+            routes: self.routes()?,
         })
     }
     fn probe(&self, profile: &Profile, clock: &dyn Clock) -> Result<Probe, Fault> {

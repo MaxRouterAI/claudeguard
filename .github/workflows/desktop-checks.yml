@@ -33,7 +33,7 @@ jobs:
           npm run build
           npm test
           npm run format:check
-      - name: Pure rules and fixture contracts only
+      - name: Rules, fixtures and loopback-only transports
         run: cargo test --workspace --locked
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Compile bundled assets; never execute the application

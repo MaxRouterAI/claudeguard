@@ -20,6 +20,7 @@ pub struct CheckGuidance {
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
+    pub preflight_mode: &'static str,
     pub launch_allowed: bool,
     pub setup_required: bool,
     pub notification_status: Option<String>,
@@ -109,6 +110,7 @@ impl State {
         sequence: u64,
     ) -> Snapshot {
         Snapshot {
+            preflight_mode: "proxy_preflight",
             launch_allowed: !demo,
             setup_required: self.profile.validate().is_err(),
             notification_status: None,

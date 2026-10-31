@@ -20,6 +20,7 @@ export interface Check {
   status: Status;
   detail: string;
   elapsedMs: number;
+  blocksLaunch: boolean;
 }
 export interface Profile {
   schemaVersion: number;
@@ -66,6 +67,7 @@ export interface NotificationDiagnostics {
   suggestions: string[];
 }
 export interface Snapshot {
+  preflightMode: 'proxy_preflight';
   sessionId: string;
   sequence: number;
   policyVersion: number;
@@ -120,6 +122,6 @@ export const statusText: Record<Status, string> = {
 
 export function checkStatusText(check: Check): string {
   return check.id === 'ipv6' && check.status === 'warning'
-    ? '覆盖待确认'
+    ? '覆盖未验证'
     : statusText[check.status];
 }

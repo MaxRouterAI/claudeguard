@@ -473,3 +473,14 @@ fn fixture_profile() -> Profile {
         non_mainland_timezone: true,
     }
 }
+
+#[test]
+fn proxy_exit_observations_accept_both_ipv4_and_ipv6_without_requiring_host_ipv6_off() {
+    for ip in ["203.0.113.7", "2001:db8::7"] {
+        let p = parse_probe(&raw(ip, "US"), 0, 1800000000.0, 1800000001.0, 100_000).unwrap();
+        assert_eq!(p.ip.to_string(), ip);
+        assert_eq!(region(&p, &fixture_profile()).status, Status::Pass);
+        let probes = (0..3).map(|_| p.clone()).collect::<Vec<_>>();
+        assert_eq!(stability(&probes, &fixture_profile()).status, Status::Pass);
+    }
+}

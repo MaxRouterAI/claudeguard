@@ -269,7 +269,7 @@ mod tests {
                 .usable_public_addresses,
             2
         );
-        assert!(observed.check().detail.contains("严格检查阻止新启动"));
+        assert!(observed.check().detail.contains("非阻断提醒"));
         assert!(parse("stf0: flags=1<> mtu 1280\n", &table("")).is_err());
     }
     #[test]

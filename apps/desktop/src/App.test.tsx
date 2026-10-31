@@ -35,6 +35,7 @@ beforeEach(() => {
   backend.listeners.clear();
   backend.invoke.mockReset();
   backend.state = {
+    preflightMode: 'proxy_preflight',
     sessionId: 'ui-fixture',
     sequence: 0,
     policyVersion: 1,
@@ -43,7 +44,13 @@ beforeEach(() => {
     launchAllowed: false,
     scanning: false,
     launching: false,
-    checks: rules.map((r) => ({ id: r.id, status: 'pass', detail: '离线模拟证据', elapsedMs: 0 })),
+    checks: rules.map((r) => ({
+      id: r.id,
+      status: 'pass',
+      detail: '离线模拟证据',
+      elapsedMs: 0,
+      blocksLaunch: false,
+    })),
     profile: {
       schemaVersion: 1,
       proxyUrl: 'http://127.0.0.1:17890',
@@ -499,14 +506,14 @@ it('first-run PAC-only discovery offers manual entry without inventing a proxy',
   expect(scans()).toBe(0);
 });
 
-it('separates IPv6 coverage uncertainty from a proven leak and keeps launch disabled', async () => {
+it('allows proxy preflight with an explicit nonblocking IPv6 coverage warning', async () => {
   backend.state!.checks = backend.state!.checks.map((c) =>
     c.id === 'ipv6'
       ? {
           ...c,
           status: 'warning',
           detail:
-            '公网 IPv6 路径：活动接口存在可用地址。\n代理覆盖：尚未验证；严格检查阻止新启动。未证实直连或泄漏。',
+            '公网 IPv6 路径：活动接口存在可用地址。\n代理覆盖：尚未验证；代理预检仅提醒，不要求关闭 IPv6。未证实直连或泄漏。',
         }
       : c,
   );
@@ -523,21 +530,45 @@ it('separates IPv6 coverage uncertainty from a proven leak and keeps launch disa
   backend.state!.demo = false;
   backend.state!.platform = 'recorded-ui-fixture';
   backend.state!.launchAllowed = true;
-  backend.state!.requiresRecheck = true;
+  backend.state!.requiresRecheck = false;
+  backend.state!.canLaunch = true;
   const user = userEvent.setup();
   render(<App />);
   await screen.findByRole('button', { name: /IPv6 本地配置/ });
   await user.click(screen.getByRole('button', { name: /IPv6 本地配置/ }));
   const detail = within(document.querySelector('.detail')!);
-  expect(detail.getByText('覆盖检查')).toBeTruthy();
-  expect(detail.getByText('覆盖待确认')).toBeTruthy();
+  expect(detail.getByText('覆盖提醒')).toBeTruthy();
+  expect(detail.getByText('覆盖未验证')).toBeTruthy();
   expect(detail.getByText(/未证实直连或泄漏/)).toBeTruthy();
   expect(detail.getByText(/处理后重新检测/)).toBeTruthy();
-  expect(detail.getByText(/未发现公网路径仅是本次观察/)).toBeTruthy();
+  expect(detail.getAllByText(/不要求关闭 IPv6/).length).toBeGreaterThan(0);
+  expect(screen.getByRole('heading', { name: '代理预检通过，可手动启动' })).toBeTruthy();
+  expect(screen.getByText(/IPv4 \/ IPv6 实际客户端流量覆盖未验证/)).toBeTruthy();
   for (const name of ['启动 CLI', '启动 Desktop']) {
     const button = screen.getByRole('button', { name });
-    expect(button.hasAttribute('disabled')).toBe(true);
-    await user.click(button);
+    expect(button.hasAttribute('disabled')).toBe(false);
   }
+  expect(backend.invoke.mock.calls.some(([name]) => name === 'launch')).toBe(false);
+});
+
+it('focuses the actual blocking check ahead of an IPv6 advisory and refuses launch', async () => {
+  backend.state!.demo = false;
+  backend.state!.launchAllowed = true;
+  backend.state!.requiresRecheck = true;
+  backend.state!.canLaunch = true; // Blocking evidence still disables the UI, even in an inconsistent snapshot.
+  backend.state!.checks = backend.state!.checks.map((c) =>
+    c.id === 'ipv6'
+      ? { ...c, status: 'warning', blocksLaunch: false, detail: 'IPv6 覆盖未验证，仅提醒' }
+      : c.id === 'final_recheck'
+        ? { ...c, status: 'fail', blocksLaunch: true, detail: '代理配置在最终复核时改变' }
+        : c,
+  );
+  render(<App />);
+  await screen.findByText('代理配置在最终复核时改变');
+  expect(document.querySelector('.rule-row.selected')?.getAttribute('data-rule')).toBe(
+    'final_recheck',
+  );
+  for (const name of ['启动 CLI', '启动 Desktop'])
+    expect(screen.getByRole('button', { name }).hasAttribute('disabled')).toBe(true);
   expect(backend.invoke.mock.calls.some(([name]) => name === 'launch')).toBe(false);
 });

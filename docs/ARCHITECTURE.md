@@ -2,7 +2,7 @@
 
 依赖从 React 界面经类型化 Tauri IPC 到 guard-service；guard-core 只包含类型、纯规则、启动意图和监测状态机，guard-platform 承载系统副作用。
 
-- `guard-core`：稳定 RuleId、Profile、策略版本、Report、单次启动意图与时效、通知证据、恢复状态和处理指引。显示文案不控制授权。
+- `guard-core`：稳定 RuleId、Profile、策略版本、Report、单次启动意图与时效、通知证据、恢复状态和处理指引。显示文案不控制授权；`Check::blocks_launch` 统一决定预检阻断影响，`CheckView` 仅序列化这个计算结果，输入的同名字段不能覆盖后端判断。CLI/Desktop 及模拟客户端复用 `proxy::ClientProxy` 纯配置。
 - `guard-platform`：受限 CommandRunner、Mac 代理/进程/路由只读采集、静态验签、固定 Cloudflare 探测、被动网络与生命周期事件、受限启动适配。Windows 返回 Unsupported。
 - `guard-service`：完整检查顺序、配置冻结、Controller、锁和代际、独立时效维护、进度快照、共享告警 sink。
 - `desktop`：持久化设置、人工确认、同用户单实例、通知/托盘/窗口、UI。前端不持有启动票据，导入报告不能授权。
@@ -24,3 +24,11 @@
 核心、服务和平台使用注入 Clock、Platform、CommandRunner、ApplicationRegistry 与 NotificationSink。默认离线/回环，无账号和真实客户端。界面使用 jsdom/Testing Library；原生 GUI 验收只能使用 demo 或用户授权的 observe-only。
 
 能在 Windows 编译共享逻辑，不代表完成 Windows 系统代理、Authenticode、通知、路径事件、终端或 WSL 适配。未实现/未知能力必须保持不通过。
+
+## 代理预检范围
+
+当前策略版本 3、模式 `proxy_preflight`。IPv6 `Warning` 为非阻断覆盖提醒，未知仍保持 Warning，不改成 Pass；其他 Warning、Fail、Skipped 与核心项非 Pass 均阻断。报告必须包含全部唯一规则、有效基线、未过期出口证据及手动启动意图。网络异常不能由覆盖提醒掩盖。
+
+IPv6 的读取/解析失败只影响该覆盖观察，不阻止固定代理诊断。IPv6 观察不进入代理本地基线；完整扫描刷新快照，后台不宣称逐周期检测 IPv6 流量。系统代理、进程、IPv4 默认路由、出口和已有网络事件的失效保护保留。代理预检是合作客户端配置及链路检查，不是应用级强制网络隔离。
+
+`proxy_transport_contract` 使用真实 curl 与仅回环的假代理/IPv4、IPv6 上游。共享生产代理环境、固定回环解析、服务端连接计数及可达性对照验证未回退；不使用生产 Cloudflare 探测的任意 URL 覆写接口，不放松 TLS，也不运行真实客户端。

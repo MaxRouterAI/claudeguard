@@ -250,7 +250,7 @@ impl Controller {
             .launch(target, &profile, checker, directory, &|| {
                 // Preparation (including static signing) may take time while
                 // the sampler is busy. Re-read local evidence at submission;
-                // a previous green scan cannot authorize a changed IPv6 path.
+                // a previous green scan cannot authorize a changed proxy path.
                 let current = self.platform.local(&profile);
                 let mut s = self.state();
                 let unchanged = current

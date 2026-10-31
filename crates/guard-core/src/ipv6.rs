@@ -49,7 +49,7 @@ impl Observation {
         let warning = relevant > 0 || routes > 0;
         let observation = if warning {
             format!(
-                "公网 IPv6 路径：{} 个可用或活动状态待确认的地址，{} 个接口存在可用外网路由。",
+                "公网 IPv6 路径：{} 个可用或活动状态待确认的地址，{} 个接口存在公网范围目标的候选路由。",
                 relevant, routes
             )
         } else {
@@ -57,9 +57,9 @@ impl Observation {
         };
         Check::new(RuleId::Ipv6, if warning { Status::Warning } else { Status::Info },
             format!("{observation}\n本次排除：{inactive} 个停用/断开接口地址，{unavailable} 个暂不可用地址。\n代理覆盖：尚未验证{}。未进行 IPv6 外联，不能据此断言已发生直连或泄漏；本次未发现也不保证未来不会改变。",
-                if warning { "；严格检查阻止新启动" } else { "；当前没有发现需要验证的公网路径" }))
+                if warning { "；这是非阻断提醒，不要求关闭 IPv6" } else { "；当前没有发现需要验证的公网路径" }))
     }
-    /// Canonical, address-free change token; kept inside LocalSnapshot only.
+    /// Canonical, address-free observation token; not a proxy authorization fingerprint.
     pub fn fingerprint(&self) -> String {
         let mut interfaces = self.interfaces.clone();
         interfaces.sort();
@@ -71,5 +71,5 @@ impl Observation {
 }
 pub fn unavailable() -> Check {
     Check::new(RuleId::Ipv6, Status::Warning,
-        "公网 IPv6 路径：无法确认，接口/路由读取失败、格式不完整或观测期间发生变化。\n代理覆盖：尚未验证；严格检查阻止新启动。未进行 IPv6 外联，也未证实直连或泄漏。")
+        "公网 IPv6 路径：无法确认，接口/路由读取失败、格式不完整或观测期间发生变化。\n代理覆盖：尚未验证；代理预检模式下仅提醒，不据此阻止启动。未进行 IPv6 外联，也未证实直连或泄漏。")
 }

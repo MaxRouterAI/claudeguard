@@ -85,14 +85,44 @@ impl Status {
     }
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", into = "CheckView")]
 pub struct Check {
     pub id: RuleId,
     pub status: Status,
     pub detail: String,
     pub elapsed_ms: u64,
 }
+/// Serialization is a projection: callers cannot supply a launch-impact flag.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckView {
+    id: RuleId,
+    status: Status,
+    detail: String,
+    elapsed_ms: u64,
+    blocks_launch: bool,
+}
+impl From<Check> for CheckView {
+    fn from(c: Check) -> Self {
+        let blocks_launch = c.blocks_launch();
+        Self {
+            id: c.id,
+            status: c.status,
+            detail: c.detail,
+            elapsed_ms: c.elapsed_ms,
+            blocks_launch,
+        }
+    }
+}
 impl Check {
+    /// Coverage uncertainty is the only nonblocking warning in proxy-preflight
+    /// mode. Failures, skipped checks and every other warning remain blocking.
+    pub fn blocks_launch(&self) -> bool {
+        if self.id.core() {
+            return self.status != Status::Pass;
+        }
+        !self.status.accepted() && !(self.id == RuleId::Ipv6 && self.status == Status::Warning)
+    }
     pub fn new(id: RuleId, status: Status, detail: impl Into<String>) -> Self {
         Self {
             id,
@@ -135,10 +165,7 @@ impl Report {
             && RuleId::ALL
                 .iter()
                 .all(|id| self.checks.iter().filter(|c| c.id == *id).count() == 1)
-            && self
-                .checks
-                .iter()
-                .all(|c| c.status.accepted() && (!c.id.core() || c.status == Status::Pass))
+            && self.checks.iter().all(|c| !c.blocks_launch())
     }
     pub fn fresh(&self, now: u64) -> bool {
         self.complete()
@@ -165,12 +192,14 @@ pub struct ClientAvailability {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReportView {
+    pub preflight_mode: &'static str,
     pub policy_version: u32,
     pub checks: Vec<Check>,
 }
 impl From<&Report> for ReportView {
     fn from(r: &Report) -> Self {
         Self {
+            preflight_mode: "proxy_preflight",
             policy_version: crate::config::POLICY_VERSION,
             checks: r.checks.clone(),
         }

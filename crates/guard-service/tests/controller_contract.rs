@@ -273,7 +273,7 @@ fn local_failure_never_probes_or_launches() {
 fn warning_blocks_a_manual_launch() {
     let clock = Arc::new(TestClock::at(100000));
     let mut f = Fixture::new(clock.clone());
-    f.bad = Some(RuleId::Ipv6);
+    f.bad = Some(RuleId::Dns);
     let fixture = Arc::new(f);
     let controller = Controller::new(fixture.clone(), clock, fixture_profile(), false).unwrap();
     assert!(controller
