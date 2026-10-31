@@ -22,6 +22,8 @@ pub fn issue(reason: &str) -> Guidance {
                 "后台会继续采样；启动前点击“重新检测”。",
             ],
         )
+    } else if reason.contains("IPv6") {
+        return check(RuleId::Ipv6, Status::Warning).expect("IPv6 warning has guidance");
     } else if reason.contains("出口 IP") || reason.contains("出口地区") {
         (
             "代理出口发生变化",
@@ -92,10 +94,13 @@ pub fn check(id: RuleId, status: Status) -> Option<Guidance> {
         ),
         RuleId::Ipv6 => (
             "IPv6 覆盖尚未确认",
-            "存在公网 IPv6 只说明需要验证代理覆盖，不能据此断言已发生泄漏。",
+            "当前存在可用公网 IPv6 地址、外网路由，或本地证据不完整；不能据此断言已发生泄漏。",
             vec![
-                "检查代理是否覆盖 IPv6，或按你的网络方案处理。",
-                "未知状态会继续阻止本工具的新启动。",
+                "先查看本项的地址状态、活动接口与路由结果；公网 IPv6 本身是正常网络能力。",
+                "核对代理的 IPv6 支持；TUN、全局模式或 Cloudflare 成功均不能单独证明覆盖。",
+                "当前版本不自动认证代理的 IPv6 覆盖，也不提供忽略放行。",
+                "若无需公网 IPv6，可手动将当前网络的“配置 IPv6”设为“仅本地链路”；这可能影响依赖公网 IPv6 的服务，本工具不会替你修改。",
+                "处理后重新检测；覆盖未知或证据不完整时仍阻止新启动。",
             ],
         ),
         RuleId::Timezone => (

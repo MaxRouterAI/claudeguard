@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Check, RuleId } from '../lib/types';
-import { rules, statusText } from '../lib/types';
+import { rules, checkStatusText } from '../lib/types';
 export function RuleList({
   checks,
   running,
@@ -52,7 +52,7 @@ export function RuleList({
               <small>{rule.note}</small>
             </span>
             <span className={`rule-status ${status}`}>
-              {active ? '检测中' : result ? statusText[result.status] : '待检查'}
+              {active ? '检测中' : result ? checkStatusText(result) : '待检查'}
             </span>
             <span className="chevron">›</span>
           </button>

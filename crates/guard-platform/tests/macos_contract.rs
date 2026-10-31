@@ -20,6 +20,8 @@ impl Clock for FixedClock {
     }
 }
 struct Runner {
+    interfaces: String,
+    ipv6_routes: String,
     dns: String,
     proxy: String,
     owner: String,
@@ -28,7 +30,15 @@ struct Runner {
 }
 impl Runner {
     fn new() -> Self {
-        Self{dns:"nameserver[0] : 192.168.1.1".into(),proxy:"HTTPEnable : 1\nHTTPProxy : 127.0.0.1\nHTTPPort : 17890\nHTTPSEnable : 1\nHTTPSProxy : 127.0.0.1\nHTTPSPort : 17890\n".into(),owner:"p123\ncFixtureProxy\nn127.0.0.1:17890".into(),exe:fixture_profile().expected_proxy_executable,calls:Mutex::default()}
+        Self {
+            interfaces: "en0: flags=8863<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST> mtu 1500\n\tinet6 fe80::1%en0 prefixlen 64\n\tstatus: active\n".into(),
+            ipv6_routes: "Routing tables\n\nInternet6:\nDestination Gateway Flags Netif Expire\nfe80::%en0/64 link#1 UCI en0\n".into(),
+            dns: "nameserver[0] : 192.168.1.1".into(),
+            proxy: "HTTPEnable : 1\nHTTPProxy : 127.0.0.1\nHTTPPort : 17890\nHTTPSEnable : 1\nHTTPSProxy : 127.0.0.1\nHTTPSPort : 17890\n".into(),
+            owner: "p123\ncFixtureProxy\nn127.0.0.1:17890".into(),
+            exe: fixture_profile().expected_proxy_executable,
+            calls: Mutex::default(),
+        }
     }
 }
 impl CommandRunner for Runner {
@@ -39,6 +49,10 @@ impl CommandRunner for Runner {
             ("/usr/sbin/scutil", Some("--proxy")) => self.proxy.clone(),
             ("/usr/sbin/lsof", _) => self.owner.clone(),
             ("/bin/ps", Some("-p")) => self.exe.clone(),
+            ("/sbin/ifconfig", _) => self.interfaces.clone(),
+            ("/usr/sbin/netstat", _) if args.last().map(String::as_str) == Some("inet6") => {
+                self.ipv6_routes.clone()
+            }
             ("/usr/sbin/netstat", _) => "default 192.168.1.1 UGScg en0".into(),
             ("/usr/bin/curl", _) => {
                 "ip=203.0.113.1\nloc=US\nts=1800000000\nCHECK_META:200:127.0.0.1:0.02:0".into()
@@ -270,4 +284,98 @@ fn empty_proxy_cannot_reach_the_command_runner_even_when_platform_is_called_dire
     assert!(p.probe(&empty, &FixedClock).is_err());
     assert!(p.local(&empty).is_err());
     assert!(r.calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn ipv6_empty_observation_is_unknown_not_clear() {
+    let mut r = Runner::new();
+    r.interfaces.clear();
+    assert_eq!(
+        platform(Arc::new(r))
+            .inspect(RuleId::Ipv6, &fixture_profile(), &FixedClock)
+            .status,
+        Status::Warning
+    );
+}
+#[test]
+fn ipv6_disconnected_interface_is_not_an_active_public_path() {
+    let mut r = Runner::new();
+    r.interfaces.push_str("en9: flags=8822<BROADCAST,SIMPLEX,MULTICAST> mtu 1500\n\tinet6 2001:db8::2 prefixlen 64\n\tstatus: inactive\n");
+    assert_eq!(
+        platform(Arc::new(r))
+            .inspect(RuleId::Ipv6, &fixture_profile(), &FixedClock)
+            .status,
+        Status::Info
+    );
+}
+
+#[test]
+fn ipv6_public_or_route_only_paths_block_local_baselines_without_network() {
+    for routes_only in [false, true] {
+        let mut r = Runner::new();
+        if routes_only {
+            r.ipv6_routes.push_str("default fe80::1%en0 UG en0\n");
+        } else {
+            r.interfaces.push_str("\tinet6 2001:db8::7 prefixlen 64\n");
+        }
+        let r = Arc::new(r);
+        assert!(matches!(
+            platform(r.clone()).local(&fixture_profile()),
+            Err(Fault::Ipv6Coverage)
+        ));
+        assert!(!r
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(exe, _)| exe == "/usr/bin/curl"));
+    }
+}
+#[test]
+fn ipv6_read_failure_or_collection_drift_cannot_be_used_as_a_clear_baseline() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Unstable {
+        base: Runner,
+        reads: AtomicUsize,
+        mode: u8,
+    }
+    impl CommandRunner for Unstable {
+        fn run(&self, exe: &str, args: &[String], timeout: Duration) -> Result<Output, Fault> {
+            let selected = (self.mode == 0 && exe == "/sbin/ifconfig")
+                || (self.mode != 0
+                    && exe == "/usr/sbin/netstat"
+                    && args.last().map(String::as_str) == Some("inet6"));
+            if selected && self.mode == 2 {
+                return Err(Fault::Local);
+            }
+            let mut out = self.base.run(exe, args, timeout)?;
+            if selected && self.reads.fetch_add(1, Ordering::SeqCst) > 0 {
+                if self.mode == 0 {
+                    out.stdout.push_str("\tinet6 2001:db8::7 prefixlen 64\n");
+                } else {
+                    out.stdout.push_str("default fe80::1%en0 UG en0\n");
+                }
+            }
+            Ok(out)
+        }
+    }
+    for mode in 0..3 {
+        let p = MacPlatform::with_dependencies(
+            Arc::new(Unstable {
+                base: Runner::new(),
+                reads: AtomicUsize::new(0),
+                mode,
+            }),
+            Arc::new(Applications { ids: vec![] }),
+        );
+        assert_eq!(
+            p.inspect(RuleId::Ipv6, &fixture_profile(), &FixedClock)
+                .status,
+            Status::Warning
+        );
+        assert!(matches!(
+            p.local(&fixture_profile()),
+            Err(Fault::Ipv6Coverage)
+        ));
+    }
 }

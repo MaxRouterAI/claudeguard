@@ -188,6 +188,19 @@ impl MacPlatform {
         }
         Ok(defaults.join("\n"))
     }
+    fn ipv6_observation(&self) -> Result<guard_core::ipv6::Observation, Fault> {
+        let read = || {
+            let interfaces = self.run("/sbin/ifconfig", &[])?;
+            let routes = self.run("/usr/sbin/netstat", &["-rn", "-f", "inet6"])?;
+            crate::macos_ipv6::parse(&interfaces, &routes).ok_or(Fault::Ipv6Coverage)
+        };
+        let before = read().map_err(|_| Fault::Ipv6Coverage)?;
+        let after = read().map_err(|_| Fault::Ipv6Coverage)?;
+        if before != after {
+            return Err(Fault::Ipv6Coverage);
+        }
+        Ok(after)
+    }
     fn processes(&self) -> Result<String, Fault> {
         self.run("/bin/ps", &["-axo", "comm="])
     }
@@ -214,10 +227,14 @@ impl Platform for MacPlatform {
         if a.status != Status::Pass || b.status != Status::Pass {
             return Err(Fault::ProxySettings);
         }
+        let ipv6 = self.ipv6_observation()?;
+        if !ipv6.check().status.accepted() {
+            return Err(Fault::Ipv6Coverage);
+        }
         Ok(LocalSnapshot {
             proxy_fingerprint: raw,
             owner_pid: self.owner(profile)?,
-            routes: self.routes()?,
+            routes: format!("{}\nIPv6:{}", self.routes()?, ipv6.fingerprint()),
         })
     }
     fn probe(&self, profile: &Profile, clock: &dyn Clock) -> Result<Probe, Fault> {
@@ -294,9 +311,9 @@ impl Platform for MacPlatform {
                 },
                 "观察IPv4默认路由；utun不证明全流量接管",
             ),
-            R::Ipv6 => match self.run("/sbin/ifconfig", &[]) {
-                Ok(raw) => policy::ipv6(&raw),
-                Err(_) => Check::new(id, S::Warning, "IPv6本地配置无法确认"),
+            R::Ipv6 => match self.ipv6_observation() {
+                Ok(observation) => observation.check(),
+                Err(_) => guard_core::ipv6::unavailable(),
             },
             R::Timezone => {
                 let system = std::fs::read_link("/etc/localtime").ok().and_then(|p| {

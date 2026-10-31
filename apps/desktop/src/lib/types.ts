@@ -102,7 +102,7 @@ export const rules: { id: RuleId; title: string; note: string }[] = [
   { id: 'exit_stability', title: '短时出口稳定性', note: '连续三次采样的一致性' },
   { id: 'dns', title: '系统 DNS', note: '本地解析器配置' },
   { id: 'route', title: '路由 / TUN', note: 'IPv4 默认路由与内网隧道' },
-  { id: 'ipv6', title: 'IPv6 本地配置', note: '是否存在公网 IPv6 地址' },
+  { id: 'ipv6', title: 'IPv6 本地配置', note: '活动接口、地址状态与外网路由' },
   { id: 'timezone', title: '系统与进程时区', note: '时区有效性、一致性与个人偏好' },
   { id: 'clock', title: '时钟参考', note: '与 Cloudflare 时间进行粗略比较' },
   { id: 'client_signature', title: '官方程序签名', note: '静态验证 Apple / Anthropic 签名' },
@@ -117,3 +117,9 @@ export const statusText: Record<Status, string> = {
   fail: '异常',
   skipped: '未执行',
 };
+
+export function checkStatusText(check: Check): string {
+  return check.id === 'ipv6' && check.status === 'warning'
+    ? '覆盖待确认'
+    : statusText[check.status];
+}

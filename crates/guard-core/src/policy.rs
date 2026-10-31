@@ -203,25 +203,6 @@ pub fn stability(probes: &[Probe], profile: &Profile) -> Check {
         "完成三次短时出口比较；仅代表采样窗口",
     )
 }
-pub fn ipv6(raw: &str) -> Check {
-    let any = raw.lines().any(|l| {
-        let p: Vec<_> = l.split_whitespace().collect();
-        p.first() == Some(&"inet6")
-            && p.get(1)
-                .and_then(|a| a.split('%').next())
-                .and_then(|a| a.parse::<IpAddr>().ok())
-                .is_some_and(|a| matches!(a,IpAddr::V6(v) if v.octets()[0]&0xe0==0x20))
-    });
-    Check::new(
-        R::Ipv6,
-        if any { S::Warning } else { S::Info },
-        if any {
-            "存在公网 IPv6，覆盖未验证；严格模式暂不放行"
-        } else {
-            "未发现本地公网 IPv6；未进行外联测试"
-        },
-    )
-}
 pub fn environment(vars: &BTreeMap<String, String>) -> Check {
     let mut conflicts = Vec::new();
     for (k, v) in vars {

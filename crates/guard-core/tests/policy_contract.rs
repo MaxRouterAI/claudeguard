@@ -191,17 +191,6 @@ fn region_is_a_configured_preference() {
     )
 }
 #[test]
-fn ipv6_is_local_observation_only() {
-    assert_eq!(
-        ipv6("inet6 fe80::1%en0\ninet6 fd00::1").status,
-        Status::Info
-    );
-    assert_eq!(
-        ipv6("inet6 2001:db8::1 prefixlen 64").status,
-        Status::Warning
-    )
-}
-#[test]
 fn timezone_preserves_personal_preference() {
     assert_eq!(
         timezone(

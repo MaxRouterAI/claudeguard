@@ -248,7 +248,20 @@ impl Controller {
         let result = self
             .platform
             .launch(target, &profile, checker, directory, &|| {
-                let s = self.state();
+                // Preparation (including static signing) may take time while
+                // the sampler is busy. Re-read local evidence at submission;
+                // a previous green scan cannot authorize a changed IPv6 path.
+                let current = self.platform.local(&profile);
+                let mut s = self.state();
+                let unchanged = current
+                    .as_ref()
+                    .is_ok_and(|local| report.baseline.as_ref().is_some_and(|b| b.local == *local));
+                if !unchanged {
+                    let reason = current.err().unwrap_or(Fault::Drift).message();
+                    let now = self.clock.now_ms();
+                    let notice = s.monitor.invalidate(reason);
+                    s.notice(notice, now);
+                }
                 ticket.permits(
                     s.monitor.revision,
                     s.monitor.launch_healthy,

@@ -176,6 +176,7 @@ fn local_failures_notify_once_continue_sampling_skip_exit_and_confirm_stable_rec
         Fault::Listener,
         Fault::ProcessIdentity,
         Fault::Routes,
+        Fault::Ipv6Coverage,
     ] {
         let h = Harness::new();
         let before = h.platform.local_calls.load(Ordering::SeqCst);

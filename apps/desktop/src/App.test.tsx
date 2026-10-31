@@ -498,3 +498,46 @@ it('first-run PAC-only discovery offers manual entry without inventing a proxy',
   ).toBe('');
   expect(scans()).toBe(0);
 });
+
+it('separates IPv6 coverage uncertainty from a proven leak and keeps launch disabled', async () => {
+  backend.state!.checks = backend.state!.checks.map((c) =>
+    c.id === 'ipv6'
+      ? {
+          ...c,
+          status: 'warning',
+          detail:
+            '公网 IPv6 路径：活动接口存在可用地址。\n代理覆盖：尚未验证；严格检查阻止新启动。未证实直连或泄漏。',
+        }
+      : c,
+  );
+  backend.state!.checkGuidance = [
+    {
+      id: 'ipv6',
+      advice: {
+        title: 'IPv6 覆盖尚未确认',
+        explanation: '公网 IPv6 是正常网络能力，当前证据不能证明代理覆盖。',
+        steps: ['核对代理的 IPv6 支持；本工具不会修改系统配置。', '处理后重新检测。'],
+      },
+    },
+  ];
+  backend.state!.demo = false;
+  backend.state!.platform = 'recorded-ui-fixture';
+  backend.state!.launchAllowed = true;
+  backend.state!.requiresRecheck = true;
+  const user = userEvent.setup();
+  render(<App />);
+  await screen.findByRole('button', { name: /IPv6 本地配置/ });
+  await user.click(screen.getByRole('button', { name: /IPv6 本地配置/ }));
+  const detail = within(document.querySelector('.detail')!);
+  expect(detail.getByText('覆盖检查')).toBeTruthy();
+  expect(detail.getByText('覆盖待确认')).toBeTruthy();
+  expect(detail.getByText(/未证实直连或泄漏/)).toBeTruthy();
+  expect(detail.getByText(/处理后重新检测/)).toBeTruthy();
+  expect(detail.getByText(/未发现公网路径仅是本次观察/)).toBeTruthy();
+  for (const name of ['启动 CLI', '启动 Desktop']) {
+    const button = screen.getByRole('button', { name });
+    expect(button.hasAttribute('disabled')).toBe(true);
+    await user.click(button);
+  }
+  expect(backend.invoke.mock.calls.some(([name]) => name === 'launch')).toBe(false);
+});

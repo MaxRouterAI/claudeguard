@@ -5,6 +5,7 @@ pub mod discovery;
 pub mod domain;
 pub mod events;
 pub mod guidance;
+pub mod ipv6;
 pub mod launch;
 pub mod monitoring;
 pub mod notifications;

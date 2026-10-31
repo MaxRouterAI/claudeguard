@@ -47,6 +47,10 @@ pub fn scan(
                             probes.push(p);
                             Check::new(id, Status::Pass, "显式本机代理HTTPS 200/TLS验证通过")
                         }
+                        Err(guard_platform::Fault::Ipv6Coverage) => Check::new(
+                            id, Status::Skipped,
+                            "IPv6 路径或覆盖待确认，严格检查未放行；未执行 HTTPS 外网检查，请查看 IPv6 项。",
+                        ),
                         Err(e) => Check::new(id, Status::Fail, e.detail()),
                     }
                 }
@@ -123,6 +127,10 @@ pub fn scan(
                         Ok(()) => {
                             Check::new(id, Status::Pass, "已复核配置、进程和出口，基线仅存内存")
                         }
+                        Err(guard_platform::Fault::Ipv6Coverage) => Check::new(
+                            id, Status::Warning,
+                            "最终复核的 IPv6 路径或覆盖状态待确认；旧检查失效，严格检查阻止新启动。",
+                        ),
                         Err(e) => Check::new(id, Status::Fail, e.detail()),
                     }
                 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { saveProfileAndCheck } from './lib/actions';
 import { useGuard } from './lib/useGuard';
-import { rules, statusText, type RuleId } from './lib/types';
+import { rules, statusText, checkStatusText, type RuleId } from './lib/types';
 import { reportText, sampleTime, eventTime } from './lib/report';
 import { RuleList } from './components/RuleList';
 import { DependencyCatalog } from './components/DependencyCatalog';
@@ -307,9 +307,11 @@ export function App() {
           <div className="detail-heading">
             <small>检测详情</small>
             <small>
-              {['dns', 'route', 'ipv6', 'clock', 'existing_clients'].includes(selected)
-                ? '参考信息'
-                : '核心检查'}
+              {selected === 'ipv6'
+                ? '覆盖检查'
+                : ['dns', 'route', 'clock', 'existing_clients'].includes(selected)
+                  ? '参考信息'
+                  : '核心检查'}
             </small>
           </div>
           <h2>{definition.title}</h2>
@@ -330,7 +332,7 @@ export function App() {
                         : 'i'}
                 </span>
               )}
-              {selectedRunning ? '正在读取与验证…' : item ? statusText[item.status] : '等待检测'}
+              {selectedRunning ? '正在读取与验证…' : item ? checkStatusText(item) : '等待检测'}
             </span>
             <span>{item ? `${(item.elapsedMs / 1000).toFixed(2)} 秒` : ''}</span>
           </div>
@@ -340,7 +342,9 @@ export function App() {
             <p>
               {selected === 'exit_region'
                 ? '以本次 Cloudflare 请求返回的地区为依据。出口地区只是当前配置基线，不代表实际所在地或平台使用资格。'
-                : `${definition.note}。此检查不验证客户端全部流量，不判断账号状态或平台资格。`}
+                : selected === 'ipv6'
+                  ? '只读采集接口与 IPv6 路由，排除已断开、停用或暂不可用的地址；存在可用公网地址、外网路由或读取失败时仍阻止启动；接口状态不明不会排除其公网地址。未发现公网路径仅是本次观察，不代表代理覆盖已验证。'
+                  : `${definition.note}。此检查不验证客户端全部流量，不判断账号状态或平台资格。`}
             </p>
           </div>
           {checkGuidance && <GuidanceCard guidance={checkGuidance} />}
