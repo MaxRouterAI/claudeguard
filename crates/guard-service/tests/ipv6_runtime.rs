@@ -41,7 +41,7 @@ impl CommandRunner for RecordedRunner {
             ("/usr/sbin/lsof",_)=>"p123\nn127.0.0.1:17890\n".into(),
             ("/bin/ps",Some("-p"))=>"/fixture/proxy".into(),
             ("/sbin/ifconfig",_) if mode==3=>"".into(),
-            ("/sbin/ifconfig",_)=>format!("en0: flags=8863<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST> mtu 1500\n\tinet6 fe80::1%en0 prefixlen 64\n\tstatus: active\n{}",if mode==1 {"\tinet6 2001:db8::7 prefixlen 64\n"} else {""}),
+            ("/sbin/ifconfig",_)=>format!("stf0: flags=0<> mtu 1280\nen0: flags=8863<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST> mtu 1500\n\tinet6 fe80::1%en0 prefixlen 64\n\tstatus: active\n{}",if mode==1 {"\tinet6 2001:db8::7 prefixlen 64\n"} else {""}),
             ("/usr/sbin/netstat",_) if args.last().map(String::as_str)==Some("inet6")=>format!("Routing tables\n\nInternet6:\nDestination Gateway Flags Netif Expire\nfe80::%en0/64 link#1 UCI en0\n{}",if mode==2 {"default fe80::1%en0 UG en0\n"} else {""}),
             ("/usr/sbin/netstat",_)=>"default 192.168.1.1 UGScg en0".into(),
             _=>panic!("simulation forbids any other command: {exe}"),

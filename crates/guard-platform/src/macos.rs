@@ -188,16 +188,23 @@ impl MacPlatform {
         }
         Ok(defaults.join("\n"))
     }
-    fn ipv6_observation(&self) -> Result<guard_core::ipv6::Observation, Fault> {
+    fn ipv6_observation(
+        &self,
+    ) -> Result<guard_core::ipv6::Observation, crate::macos_ipv6::InspectionError> {
+        use crate::macos_ipv6::InspectionError as E;
         let read = || {
-            let interfaces = self.run("/sbin/ifconfig", &[])?;
-            let routes = self.run("/usr/sbin/netstat", &["-rn", "-f", "inet6"])?;
-            crate::macos_ipv6::parse(&interfaces, &routes).ok_or(Fault::Ipv6Coverage)
+            let interfaces = self
+                .run("/sbin/ifconfig", &[])
+                .map_err(|_| E::ReadInterfaces)?;
+            let routes = self
+                .run("/usr/sbin/netstat", &["-rn", "-f", "inet6"])
+                .map_err(|_| E::ReadRoutes)?;
+            crate::macos_ipv6::parse(&interfaces, &routes)
         };
-        let before = read().map_err(|_| Fault::Ipv6Coverage)?;
-        let after = read().map_err(|_| Fault::Ipv6Coverage)?;
+        let before = read()?;
+        let after = read()?;
         if before != after {
-            return Err(Fault::Ipv6Coverage);
+            return Err(E::Changed);
         }
         Ok(after)
     }
@@ -227,7 +234,7 @@ impl Platform for MacPlatform {
         if a.status != Status::Pass || b.status != Status::Pass {
             return Err(Fault::ProxySettings);
         }
-        let ipv6 = self.ipv6_observation()?;
+        let ipv6 = self.ipv6_observation().map_err(|_| Fault::Ipv6Coverage)?;
         if !ipv6.check().status.accepted() {
             return Err(Fault::Ipv6Coverage);
         }
@@ -313,7 +320,7 @@ impl Platform for MacPlatform {
             ),
             R::Ipv6 => match self.ipv6_observation() {
                 Ok(observation) => observation.check(),
-                Err(_) => guard_core::ipv6::unavailable(),
+                Err(reason) => reason.check(),
             },
             R::Timezone => {
                 let system = std::fs::read_link("/etc/localtime").ok().and_then(|p| {

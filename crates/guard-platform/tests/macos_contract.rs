@@ -31,7 +31,7 @@ struct Runner {
 impl Runner {
     fn new() -> Self {
         Self {
-            interfaces: "en0: flags=8863<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST> mtu 1500\n\tinet6 fe80::1%en0 prefixlen 64\n\tstatus: active\n".into(),
+            interfaces: "stf0: flags=0<> mtu 1280\nen0: flags=8863<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST> mtu 1500\n\tinet6 fe80::1%en0 prefixlen 64\n\tstatus: active\n".into(),
             ipv6_routes: "Routing tables\n\nInternet6:\nDestination Gateway Flags Netif Expire\nfe80::%en0/64 link#1 UCI en0\n".into(),
             dns: "nameserver[0] : 192.168.1.1".into(),
             proxy: "HTTPEnable : 1\nHTTPProxy : 127.0.0.1\nHTTPPort : 17890\nHTTPSEnable : 1\nHTTPSProxy : 127.0.0.1\nHTTPSPort : 17890\n".into(),
@@ -341,11 +341,11 @@ fn ipv6_read_failure_or_collection_drift_cannot_be_used_as_a_clear_baseline() {
     }
     impl CommandRunner for Unstable {
         fn run(&self, exe: &str, args: &[String], timeout: Duration) -> Result<Output, Fault> {
-            let selected = (self.mode == 0 && exe == "/sbin/ifconfig")
-                || (self.mode != 0
+            let selected = (matches!(self.mode, 0 | 3) && exe == "/sbin/ifconfig")
+                || (!matches!(self.mode, 0 | 3)
                     && exe == "/usr/sbin/netstat"
                     && args.last().map(String::as_str) == Some("inet6"));
-            if selected && self.mode == 2 {
+            if selected && self.mode >= 2 {
                 return Err(Fault::Local);
             }
             let mut out = self.base.run(exe, args, timeout)?;
@@ -359,7 +359,7 @@ fn ipv6_read_failure_or_collection_drift_cannot_be_used_as_a_clear_baseline() {
             Ok(out)
         }
     }
-    for mode in 0..3 {
+    for mode in 0..4 {
         let p = MacPlatform::with_dependencies(
             Arc::new(Unstable {
                 base: Runner::new(),
@@ -368,14 +368,37 @@ fn ipv6_read_failure_or_collection_drift_cannot_be_used_as_a_clear_baseline() {
             }),
             Arc::new(Applications { ids: vec![] }),
         );
-        assert_eq!(
-            p.inspect(RuleId::Ipv6, &fixture_profile(), &FixedClock)
-                .status,
-            Status::Warning
-        );
+        let check = p.inspect(RuleId::Ipv6, &fixture_profile(), &FixedClock);
+        assert_eq!(check.status, Status::Warning);
+        let expected = match mode {
+            2 => "IPv6 路由读取失败或超时",
+            3 => "接口读取失败或超时",
+            _ => "两轮本地采样结果发生变化",
+        };
+        assert!(check.detail.contains(expected));
         assert!(matches!(
             p.local(&fixture_profile()),
             Err(Fault::Ipv6Coverage)
         ));
+    }
+}
+
+#[test]
+fn ipv6_error_details_identify_the_failed_stage_without_exporting_output() {
+    for route_error in [false, true] {
+        let mut r = Runner::new();
+        if route_error {
+            r.ipv6_routes = "private-invalid-route-marker".into();
+        } else {
+            r.interfaces = "private-invalid-interface-marker".into();
+        }
+        let check = platform(Arc::new(r)).inspect(RuleId::Ipv6, &fixture_profile(), &FixedClock);
+        assert_eq!(check.status, Status::Warning);
+        assert!(check.detail.contains(if route_error {
+            "IPv6 路由表格式无法解析"
+        } else {
+            "接口格式无法解析"
+        }));
+        assert!(!check.detail.contains("private-invalid"));
     }
 }

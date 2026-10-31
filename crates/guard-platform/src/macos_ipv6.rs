@@ -46,7 +46,11 @@ fn interfaces(raw: &str) -> Option<Vec<Interface>> {
             if mtu == 0 {
                 return None;
             }
-            if flags.is_empty() || (numeric & 1 != 0) != flags.split(',').any(|s| s == "UP") {
+            // Native dormant interfaces (for example stf0) legitimately have
+            // flags=0<>. Empty textual flags with nonzero bits stay invalid.
+            if (flags.is_empty() && numeric != 0)
+                || (numeric & 1 != 0) != flags.split(',').any(|s| s == "UP")
+            {
                 return None;
             }
             parsed.insert(
@@ -185,10 +189,35 @@ fn routes(raw: &str, interfaces: &[Interface]) -> Option<Vec<String>> {
     columns?;
     Some(external.into_iter().collect())
 }
-pub(crate) fn parse(ifconfig: &str, netstat: &str) -> Option<Observation> {
-    let interfaces = interfaces(ifconfig)?;
-    let external_route_interfaces = routes(netstat, &interfaces)?;
-    Some(Observation {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum InspectionError {
+    ReadInterfaces,
+    ReadRoutes,
+    ParseInterfaces,
+    ParseRoutes,
+    Changed,
+}
+impl InspectionError {
+    pub(crate) fn check(self) -> guard_core::domain::Check {
+        // Closed, static messages only: never expose raw command output,
+        // addresses, routes or subprocess errors to the UI/report.
+        let reason = match self {
+            Self::ReadInterfaces => "接口读取失败或超时（ifconfig）",
+            Self::ReadRoutes => "IPv6 路由读取失败或超时（netstat）",
+            Self::ParseInterfaces => "接口格式无法解析（ifconfig）",
+            Self::ParseRoutes => "IPv6 路由表格式无法解析（netstat）",
+            Self::Changed => "两轮本地采样结果发生变化，请网络稳定后重新检测",
+        };
+        let mut check = guard_core::ipv6::unavailable();
+        check.detail = format!("本地证据：{reason}。\n{}", check.detail);
+        check
+    }
+}
+pub(crate) fn parse(ifconfig: &str, netstat: &str) -> Result<Observation, InspectionError> {
+    let interfaces = interfaces(ifconfig).ok_or(InspectionError::ParseInterfaces)?;
+    let external_route_interfaces =
+        routes(netstat, &interfaces).ok_or(InspectionError::ParseRoutes)?;
+    Ok(Observation {
         interfaces,
         external_route_interfaces,
     })
@@ -216,6 +245,32 @@ mod tests {
     }
     fn status(interfaces: &str, routes: &str) -> Status {
         parse(interfaces, &table(routes)).map_or(Status::Warning, |o| o.check().status)
+    }
+    #[test]
+    fn zero_flag_system_interface_is_valid_and_does_not_hide_active_public_ipv6() {
+        let dormant = "stf0: flags=0<> mtu 1280\n";
+        let local = iface("en0", "active", "\tinet6 fe80::1%en0 prefixlen 64\n");
+        let no_public =
+            parse(&format!("{dormant}{local}"), &table("")).expect("native zero flags are valid");
+        assert_eq!(no_public.check().status, Status::Info);
+        let public = iface("en0", "active", "\tinet6 2001:db8::7 prefixlen 64 autoconf secured\n\tinet6 2001:db8::8 prefixlen 64 autoconf temporary\n");
+        let observed = parse(
+            &format!("{dormant}{public}"),
+            &table("default fe80::1%en0 UGcg en0\n"),
+        )
+        .expect("valid interface set");
+        assert_eq!(observed.check().status, Status::Warning);
+        assert_eq!(
+            observed
+                .interfaces
+                .iter()
+                .find(|i| i.name == "en0")
+                .unwrap()
+                .usable_public_addresses,
+            2
+        );
+        assert!(observed.check().detail.contains("严格检查阻止新启动"));
+        assert!(parse("stf0: flags=1<> mtu 1280\n", &table("")).is_err());
     }
     #[test]
     fn active_public_deprecated_virtual_and_unknown_links_stay_blocked() {
@@ -301,7 +356,7 @@ mod tests {
             "en0: flags=1<UP> mtu 1500\n\tinet6:",
             "en0: flags=1<UP> mtu 1500\n\tinet6garbage 2001:db8::1 prefixlen 64",
         ] {
-            assert!(parse(raw, &table("")).is_none(), "{raw}");
+            assert!(parse(raw, &table("")).is_err(), "{raw}");
         }
 
         for raw in [
@@ -316,10 +371,10 @@ mod tests {
             "en0: flags=0<UP> mtu 1500\n",
             "en0: flags=bogus<UP> mtu 1500\n",
         ] {
-            assert!(parse(raw, &table("")).is_none(), "{raw}");
+            assert!(parse(raw, &table("")).is_err(), "{raw}");
         }
         for raw in ["", "Internet6:", "Destination Gateway Flags Netif", "Routing tables\nInternet6:\nDestination Gateway Flags Netif\ndefault", "Routing tables\nInternet6:\nDestination Gateway Flags Netif\ndefault link#9 U missing0", "Routing tables\nInternet6:\nDestination Gateway Flags Netif\ngarbage link#1 U en0"] {
-            assert!(parse(&valid,raw).is_none(),"{raw}");
+            assert!(parse(&valid,raw).is_err(),"{raw}");
         }
     }
     #[test]
